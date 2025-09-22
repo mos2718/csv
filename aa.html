@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>客戶下訂單</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { color: #333; }
+    table { border-collapse: collapse; width: 80%; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f2f2f2; }
+    button { padding: 8px 12px; margin: 5px; cursor: pointer; }
+    #result { margin-top: 20px; padding: 10px; border: 1px solid #aaa; }
+  </style>
+</head>
+<body>
+  <h2>客戶下訂單</h2>
+
+  <!-- 客戶選擇 -->
+  <label for="customer">選擇客戶：</label>
+  <select id="customer">
+    <option value="C001">C001 - 王小明</option>
+    <option value="C002">C002 - 李小華</option>
+    <option value="C003">C003 - 陳大同</option>
+  </select>
+
+  <h3>商品清單</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>商品ID</th>
+        <th>商品名稱</th>
+        <th>單價</th>
+        <th>數量</th>
+      </tr>
+    </thead>
+    <tbody id="productList">
+      <!-- JavaScript 會填入 -->
+    </tbody>
+  </table>
+  <button onclick="submitOrder()">產生訂單</button>
+
+  <div id="result"></div>
+
+  <script>
+    // 模擬商品資料 (Product.csv)
+    const products = [
+      { id: "P001", name: "蘋果", price: 25 },
+      { id: "P002", name: "牛奶", price: 60 },
+      { id: "P003", name: "牙膏", price: 120 }
+    ];
+
+    // 初始化商品清單
+    const tbody = document.getElementById("productList");
+    products.forEach(p => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${p.id}</td>
+        <td>${p.name}</td>
+        <td>${p.price}</td>
+        <td><input type="number" id="qty_${p.id}" min="0" value="0"></td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    // 產生訂單
+    function submitOrder() {
+      const customer = document.getElementById("customer").value;
+      const orderId = "O" + Math.floor(Math.random() * 10000); // 模擬訂單編號
+      const orderDate = new Date().toLocaleString();
+
+      let orderDetails = [];
+      let total = 0;
+
+      products.forEach(p => {
+        const qty = parseInt(document.getElementById(`qty_${p.id}`).value) || 0;
+        if (qty > 0) {
+          const subtotal = qty * p.price;
+          orderDetails.push({
+            orderId: orderId,
+            productId: p.id,
+            quantity: qty,
+            unitPrice: p.price,
+            subtotal: subtotal
+          });
+          total += subtotal;
+        }
+      });
+
+      if (orderDetails.length === 0) {
+        alert("請至少選擇一樣商品！");
+        return;
+      }
+
+      // 顯示訂單結果
+      let html = `<h3>訂單資訊</h3>`;
+      html += `<p>訂單編號：${orderId}</p>`;
+      html += `<p>客戶：${customer}</p>`;
+      html += `<p>下單時間：${orderDate}</p>`;
+      html += `<table><tr><th>商品ID</th><th>數量</th><th>單價</th><th>小計</th></tr>`;
+      orderDetails.forEach(d => {
+        html += `<tr>
+          <td>${d.productId}</td>
+          <td>${d.quantity}</td>
+          <td>${d.unitPrice}</td>
+          <td>${d.subtotal}</td>
+        </tr>`;
+      });
+      html += `</table>`;
+      html += `<p><b>總金額：${total}</b></p>`;
+
+      document.getElementById("result").innerHTML = html;
+    }
+  </script>
+</body>
+</html>
