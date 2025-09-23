@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>訂單下單範例 — 客戶下訂單</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#0ea5a8;--glass: rgba(255,255,255,0.03)}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans TC', 'Microsoft JhengHei', sans-serif;background:linear-gradient(180deg,#071025 0%, #082033 100%);color:#e6eef6}
+    .container{max-width:1100px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:4px 0 0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6)}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    select,input[type=text],input[type=number]{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:var(--glass);color:inherit}
+    button{background:var(--accent);border:none;color:#042024;padding:8px 12px;border-radius:10px;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+    .products{max-height:380px;overflow:auto}
+    .product-row{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;margin-bottom:8px;background:linear-gradient(90deg, rgba(255,255,255,0.01), transparent)}
+    .product-row .meta{flex:1}
+    .product-title{font-weight:600}
+    .small{font-size:12px;color:var(--muted)}
+    .cart{display:flex;flex-direction:column;gap:8px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;text-align:left;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    tfoot td{font-weight:700}
+    .actions{display:flex;gap:8px;align-items:center}
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+    .badge{background:rgba(255,255,255,0.04);padding:6px 10px;border-radius:10px;font-size:13px}
+    @media (max-width:880px){.grid{grid-template-columns:1fr;}.container{padding:12px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>客戶下訂單 (示範)</h1>
+        <p class="lead">以單頁應用展示：挑選商品、加入購物車、產生訂單並下載多份 CSV。</p>
+      </div>
+      <div class="badge">本機運行 / 不會上傳伺服器</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <label>選擇客戶或新增</label>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <select id="customerSelect"></select>
+          <button id="btnNewCustomer" class="ghost">新增</button>
+        </div>
+        <div id="newCustomerForm" style="display:none;margin-bottom:12px">
+          <label>姓名</label>
+          <input id="custName" type="text" placeholder="輸入姓名" />
+          <label>電話</label>
+          <input id="custPhone" type="text" placeholder="0912-345678" />
+          <label>E-mail</label>
+          <input id="custEmail" type="text" placeholder="example@mail.com" />
+          <label>地址</label>
+          <input id="custAddr" type="text" placeholder="台北市..." />
+          <div style="margin-top:8px;display:flex;gap:8px"><button id="saveCustomer">儲存客戶</button><button id="cancelCustomer" class="ghost">取消</button></div>
+        </div>
+
+        <hr style="opacity:0.06;margin:10px 0">
+
+        <label>商品清單</label>
+        <div class="products" id="productList"></div>
+
+      </section>
+
+      <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <label>購物車</label>
+            <div class="small">檢視已加入的商品，調整數量或移除</div>
+          </div>
+          <div class="actions">
+            <button id="btnClear" class="ghost">清空購物車</button>
+            <button id="btnGenerate">產生訂單並下載 CSV</button>
+          </div>
+        </div>
+
+        <div class="cart">
+          <table id="cartTable">
+            <thead><tr><th>商品</th><th>單價</th><th>數量</th><th>小計</th><th></th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td colspan="3">總計</td><td id="cartTotal">0</td><td></td></tr></tfoot>
+          </table>
+        </div>
+
+        <hr style="opacity:0.06;margin:12px 0">
+
+        <label>訂單資訊</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input id="paymentMethod" placeholder="付款方式（預設：信用卡）" value="信用卡" />
+          <input id="shippingMethod" placeholder="配送方式（預設：宅配）" value="宅配" />
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="small">產生的 OrderID</div>
+          <div id="generatedOrderId" style="margin-left:8px;font-weight:700">-</div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button id="downloadSample">下載目前 CSV（只含本次）</button>
+          <button id="showJson" class="ghost">顯示 JSON</button>
+        </div>
+
+        <pre id="jsonOut" style="margin-top:12px;background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;display:none;overflow:auto;max-height:220px"></pre>
+
+      </section>
+    </div>
+
+    <footer>說明：會基於頁面內記憶產生六個 CSV（Customer/Product/Order/OrderDetail/Payment/Shipment）供下載。建議在本機打開（雙擊 HTML）或用簡易靜態伺服器。</footer>
+  </div>
+
+  <script>
+    // 預設資料（可修改）
+    const initialCustomers = [
+      {CustomerID:'C001',Name:'王小明',Phone:'0912000111',Email:'ming@example.com',Address:'台北市信義路100號'},
+      {CustomerID:'C002',Name:'李小華',Phone:'0922333444',Email:'hua@example.com',Address:'台中市中港路200號'}
+    ];
+    const initialProducts = [
+      {ProductID:'P001',ProductName:'蘋果',Specification:'紅色/1斤',UnitPrice:100,StockQty:50},
+      {ProductID:'P002',ProductName:'香蕉',Specification:'黃熟/1斤',UnitPrice:60,StockQty:80},
+      {ProductID:'P003',ProductName:'牛奶',Specification:'1公升裝',UnitPrice:80,StockQty:30}
+    ];
+
+    // 應用狀態
+    const state = {
+      customers: [...initialCustomers],
+      products: [...initialProducts],
+      cart: [],
+      orders: [],
+      payments: [],
+      shipments: []
+    };
+
+    // DOM refs
+    const customerSelect = document.getElementById('customerSelect');
+    const productList = document.getElementById('productList');
+    const cartTableBody = document.querySelector('#cartTable tbody');
+    const cartTotalEl = document.getElementById('cartTotal');
+    const btnNewCustomer = document.getElementById('btnNewCustomer');
+    const newCustomerForm = document.getElementById('newCustomerForm');
+    const saveCustomerBtn = document.getElementById('saveCustomer');
+    const cancelCustomerBtn = document.getElementById('cancelCustomer');
+    const btnClear = document.getElementById('btnClear');
+    const btnGenerate = document.getElementById('btnGenerate');
+    const generatedOrderId = document.getElementById('generatedOrderId');
+    const downloadSample = document.getElementById('downloadSample');
+    const showJson = document.getElementById('showJson');
+    const jsonOut = document.getElementById('jsonOut');
+
+    // helper
+    function $(s){return document.querySelector(s)}
+    function uid(prefix){return prefix + Date.now().toString().slice(-6) + Math.floor(Math.random()*90+10)}
+
+    // render customers
+    function refreshCustomers(){
+      customerSelect.innerHTML = '';
+      state.customers.forEach(c=>{
+        const opt = document.createElement('option'); opt.value = c.CustomerID; opt.textContent = `${c.CustomerID} | ${c.Name}`; customerSelect.appendChild(opt);
+      });
+    }
+
+    // render products
+    function renderProducts(){
+      productList.innerHTML = '';
+      state.products.forEach(p=>{
+        const row = document.createElement('div'); row.className='product-row';
+        row.innerHTML = `
+          <div class="meta">
+            <div class="product-title">${p.ProductName} <span class="small">${p.Specification}</span></div>
+            <div class="small">編號: ${p.ProductID} • 庫存: ${p.StockQty}</div>
+          </div>
+          <div style="text-align:right;width:140px">NT$ ${p.UnitPrice}<div style="margin-top:6px"><input type="number" min="0" step="0.1" value="0" style="width:90px;padding:6px;border-radius:6px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.03)" data-productid="${p.ProductID}" /></div></div>
+          <div><button data-add="${p.ProductID}">加入</button></div>
+        `;
+        productList.appendChild(row);
+      });
+    }
+
+    // add to cart
+    function addToCart(productId, qty){
+      qty = Number(qty);
+      if(!(qty>0)) return alert('請輸入大於 0 的數量');
+      const prod = state.products.find(x=>x.ProductID===productId);
+      if(!prod) return alert('找不到商品');
+      // check stock (simple)
+      if(qty > prod.StockQty) {
+        if(!confirm('數量超過庫存，仍要加入嗎？')) return;
+      }
+      const existing = state.cart.find(i=>i.ProductID===productId);
+      if(existing) existing.Quantity += qty; else state.cart.push({ProductID:productId,ProductName:prod.ProductName,UnitPrice:prod.UnitPrice,Quantity:qty});
+      renderCart();
+    }
+
+    // render cart
+    function renderCart(){
+      cartTableBody.innerHTML = '';
+      let total=0;
+      state.cart.forEach((item,idx)=>{
+        const tr=document.createElement('tr');
+        const subtotal = Number(item.UnitPrice)*Number(item.Quantity);
+        total += subtotal;
+        tr.innerHTML = `<td>${item.ProductName} <div class="small">${item.ProductID}</div></td>
+                        <td>NT$ ${item.UnitPrice}</td>
+                        <td><input type="number" min="0" step="0.1" value="${item.Quantity}" data-idx="${idx}" style="width:80px;padding:6px;border-radius:6px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.03)" /></td>
+                        <td>NT$ ${subtotal}</td>
+                        <td><button data-remove="${idx}" class="ghost">移除</button></td>`;
+        cartTableBody.appendChild(tr);
+      });
+      cartTotalEl.textContent = 'NT$ ' + total;
+    }
+
+    // events
+    document.addEventListener('click',e=>{
+      if(e.target.matches('button[data-add]')){
+        const pid = e.target.getAttribute('data-add');
+        const inp = document.querySelector(`input[data-productid="${pid}"]`);
+        addToCart(pid, inp ? inp.value : 1);
+      }
+      if(e.target.matches('button[data-remove]')){
+        const idx = Number(e.target.getAttribute('data-remove'));
+        state.cart.splice(idx,1); renderCart();
+      }
+    });
+
+    document.addEventListener('input',e=>{
+      if(e.target.matches('#cartTable tbody input[type=number]')){
+        const idx = Number(e.target.getAttribute('data-idx')); const val = Number(e.target.value);
+        if(!isNaN(val) && val>=0){ state.cart[idx].Quantity = val; renderCart(); }
+      }
+    });
+
+    btnNewCustomer.addEventListener('click',()=>{ newCustomerForm.style.display='block'; });
+    cancelCustomerBtn.addEventListener('click',()=>{ newCustomerForm.style.display='none'; });
+    saveCustomerBtn.addEventListener('click',()=>{
+      const name = document.getElementById('custName').value.trim();
+      const phone = document.getElementById('custPhone').value.trim();
+      const email = document.getElementById('custEmail').value.trim();
+      const addr = document.getElementById('custAddr').value.trim();
+      if(!name) return alert('請輸入姓名');
+      const id = uid('C');
+      const obj={CustomerID:id,Name:name,Phone:phone,Email:email,Address:addr};
+      state.customers.push(obj); refreshCustomers(); customerSelect.value=id; newCustomerForm.style.display='none';
+      // clear inputs
+      document.getElementById('custName').value='';document.getElementById('custPhone').value='';document.getElementById('custEmail').value='';document.getElementById('custAddr').value='';
+    });
+
+    btnClear.addEventListener('click',()=>{ if(confirm('確定清空購物車？')){ state.cart=[]; renderCart(); } });
+
+    btnGenerate.addEventListener('click',()=>{
+      if(state.cart.length===0) return alert('購物車為空');
+      const custId = customerSelect.value; const customer = state.customers.find(c=>c.CustomerID===custId);
+      if(!customer) return alert('請選擇客戶');
+      // create Order
+      const orderId = uid('O');
+      const orderDate = new Date().toISOString().slice(0,10);
+      const paymentMethod = document.getElementById('paymentMethod').value || '信用卡';
+      const shippingMethod = document.getElementById('shippingMethod').value || '宅配';
+      const total = state.cart.reduce((s,i)=>s + Number(i.UnitPrice)*Number(i.Quantity),0);
+      const order = {OrderID:orderId,CustomerID:custId,OrderDate:orderDate,OrderStatus:'已建立',PaymentMethod:paymentMethod,ShippingMethod:shippingMethod,TotalAmount:total};
+      state.orders.push(order);
+      // order details
+      const details = state.cart.map((it,idx)=>({OrderDetailID: uid('OD'),OrderID:orderId,ProductID:it.ProductID,Quantity:it.Quantity,UnitPrice:it.UnitPrice,Subtotal: Number(it.UnitPrice)*Number(it.Quantity)}));
+      // payments
+      const payment = {PaymentID: uid('PMT'),OrderID:orderId,PaymentDate:(paymentMethod?orderDate:''),PaymentAmount:total,PaymentStatus: paymentMethod? '已付款':'待付款',TransactionCode: uid('TX')};
+      state.payments.push(payment);
+      // shipment (placeholder)
+      const shipment = {ShipmentID: uid('S'),OrderID:orderId,LogisticsCompany:'',TrackingNumber:'',ShipDate:'',DeliveryDate:'',Status:'未出貨'};
+      state.shipments.push(shipment);
+      // save details into state (flattening for CSV outputs)
+      details.forEach(d=>{ if(!state.orderDetails) state.orderDetails=[]; state.orderDetails.push(d); });
+
+      generatedOrderId.textContent = orderId;
+      alert('訂單已建立：' + orderId + '\n同時可按「下載目前 CSV」取得本次資料');
+      // reduce stock (simple)
+      details.forEach(d=>{
+        const prod = state.products.find(p=>p.ProductID===d.ProductID);
+        if(prod) prod.StockQty = Math.max(0, prod.StockQty - d.Quantity);
+      });
+      // clear cart
+      state.cart=[]; renderCart(); renderProducts();
+    });
+
+    // create CSV helpers
+    function toCSV(rows, headers){
+      const esc = v => (v===null || v===undefined) ? '' : String(v).replace(/"/g,'""');
+      let csv = headers.join(',') + '\n';
+      rows.forEach(r=>{
+        const line = headers.map(h=>`"${esc(r[h])}"`).join(','); csv += line + '\n';
+      });
+      return csv;
+    }
+
+    function download(filename, text){
+      const blob = new Blob([text],{type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    downloadSample.addEventListener('click',()=>{
+      // prepare six CSVs but only include newly created orders and related rows
+      // For simplicity: include all customers/products in Customer.csv and Product.csv, but Order/OrderDetail/Payment/Shipment include current orders state
+      const customersCSV = toCSV(state.customers,['CustomerID','Name','Phone','Email','Address']);
+      const productsCSV = toCSV(state.products,['ProductID','ProductName','Specification','UnitPrice','StockQty']);
+      const ordersCSV = toCSV(state.orders,['OrderID','CustomerID','OrderDate','OrderStatus','PaymentMethod','ShippingMethod','TotalAmount']);
+      const orderDetailsCSV = toCSV(state.orderDetails || [],['OrderDetailID','OrderID','ProductID','Quantity','UnitPrice','Subtotal']);
+      const paymentsCSV = toCSV(state.payments,['PaymentID','OrderID','PaymentDate','PaymentAmount','PaymentStatus','TransactionCode']);
+      const shipmentsCSV = toCSV(state.shipments,['ShipmentID','OrderID','LogisticsCompany','TrackingNumber','ShipDate','DeliveryDate','Status']);
+
+      // create single zip-like download: here we trigger multiple downloads sequentially
+      download('Customer.csv', customersCSV);
+      setTimeout(()=>download('Product.csv', productsCSV), 300);
+      setTimeout(()=>download('Order.csv', ordersCSV), 600);
+      setTimeout(()=>download('OrderDetail.csv', orderDetailsCSV), 900);
+      setTimeout(()=>download('Payment.csv', paymentsCSV), 1200);
+      setTimeout(()=>download('Shipment.csv', shipmentsCSV), 1500);
+    });
+
+    showJson.addEventListener('click',()=>{
+      const out = {customers:state.customers,products:state.products,orders:state.orders,orderDetails:state.orderDetails||[],payments:state.payments,shipments:state.shipments};
+      jsonOut.style.display = jsonOut.style.display === 'none' ? 'block' : 'none'; jsonOut.textContent = JSON.stringify(out,null,2);
+    });
+
+    // initial render
+    refreshCustomers(); renderProducts(); renderCart();
+  </script>
+</body>
+</html>
