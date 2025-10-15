@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>生理監測 — 體溫上傳 (FHIR Observation)</title>
+  <style>
+    body{font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans TC', 'Helvetica Neue', Arial; background:#f7fafc; color:#111; padding:28px}
+    .card{max-width:820px;margin:18px auto;padding:18px;border-radius:12px;background:#fff;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    label{display:block;margin-top:12px;font-weight:600}
+    input,select,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #d1d5db}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    pre{background:#0f172a;color:#e6eef8;padding:12px;border-radius:8px;overflow:auto}
+    .muted{color:#6b7280;font-size:0.9rem}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>生理監測輸入 — 體溫 Observation 上傳</h1>
+    <p class="muted">FHIR server: <strong>https://hapi.fhir.org/baseR4/</strong> — 範例 patient id 已預設為 <strong>49410276</strong></p>
+
+    <label for="fhirServer">FHIR Server URL</label>
+    <input id="fhirServer" type="url" value="https://hapi.fhir.org/baseR4/" />
+
+    <label for="patientId">Patient ID (Patient/{{id}})</label>
+    <input id="patientId" type="text" value="49410276" />
+
+    <div class="row">
+      <div class="col">
+        <label for="value">體溫值 (數字)</label>
+        <input id="value" type="number" step="0.1" value="36.6" />
+      </div>
+      <div class="col">
+        <label for="unit">單位</label>
+        <select id="unit">
+          <option value="Cel">°C (Celsius)</option>
+          <option value="F">°F (Fahrenheit)</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="effective">測量時間 (ISO 8601)</label>
+    <input id="effective" type="datetime-local" />
+
+    <label for="device">裝置/來源 (可選)</label>
+    <input id="device" placeholder="例如: Thermometer A123 或 leave blank" />
+
+    <div style="margin-top:14px;display:flex;gap:10px;">
+      <button id="makeObservation">產生 Observation (不上傳)</button>
+      <button id="uploadObservation">產生並上傳到 FHIR Server</button>
+      <button id="randomize">隨機產生一個體溫並填入 (demo)</button>
+    </div>
+
+    <h3 style="margin-top:18px">FHIR Observation JSON</h3>
+    <pre id="output">(按「產生 Observation」會在此顯示要上傳的 JSON)</pre>
+
+    <h3>上傳回應</h3>
+    <pre id="response">(上傳結果會顯示在這裡)</pre>
+
+    <p class="muted" style="margin-top:12px">說明：此頁面會建立一個 FHIR Observation resource，使用 LOINC code <code>8310-5</code>（Body temperature）。上傳時採用 <code>POST /Observation</code>。若要將 Observation 直接放到特定 Patient 的醫療紀錄中，可用 <code>subject.reference</code> 指向 <code>Patient/{{id}}</code>（本範例即使用此方式）。</p>
+  </div>
+
+<script>
+// helper: 格式化 datetime-local -> ISO 8601
+function toIsoLocal(datetimeLocal) {
+  if (!datetimeLocal) return new Date().toISOString();
+  // datetime-local gives 'YYYY-MM-DDTHH:MM' (no timezone). We'll treat it as local and convert to ISO with offset.
+  const dt = new Date(datetimeLocal);
+  return dt.toISOString();
+}
+
+function buildObservation({patientId, value, unitCode, effectiveDateTime, deviceReference}){
+  const obs = {
+    resourceType: "Observation",
+    status: "final",
+    category: [{
+      coding: [{ system: "http://terminology.hl7.org/CodeSystem/observation-category", code: "vital-signs", display: "Vital Signs" }]
+    }],
+    code: {
+      coding: [{ system: "http://loinc.org", code: "8310-5", display: "Body temperature" }],
+      text: "Body temperature"
+    },
+    subject: { reference: `Patient/${patientId}` },
+    effectiveDateTime: effectiveDateTime,
+    valueQuantity: {
+      value: Number(value),
+      unit: unitCode === 'F' ? '°F' : '°C',
+      system: 'http://unitsofmeasure.org',
+      code: unitCode
+    }
+  };
+
+  if (deviceReference) {
+    obs.device = { display: deviceReference };
+  }
+
+  return obs;
+}
+
+function pretty(obj){ return JSON.stringify(obj, null, 2); }
+
+// UI handlers
+const fhirServerEl = document.getElementById('fhirServer');
+const patientIdEl = document.getElementById('patientId');
+const valueEl = document.getElementById('value');
+const unitEl = document.getElementById('unit');
+const effectiveEl = document.getElementById('effective');
+const deviceEl = document.getElementById('device');
+const outputEl = document.getElementById('output');
+const responseEl = document.getElementById('response');
+
+// set default effective time to now
+(function setNow(){
+  const now = new Date();
+  // produce local datetime-local value YYYY-MM-DDTHH:MM
+  const pad = n=>String(n).padStart(2,'0');
+  const local = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  effectiveEl.value = local;
+})();
+
+document.getElementById('makeObservation').addEventListener('click', ()=>{
+  const obs = buildObservation({
+    patientId: patientIdEl.value.trim(),
+    value: valueEl.value,
+    unitCode: unitEl.value,
+    effectiveDateTime: toIsoLocal(effectiveEl.value),
+    deviceReference: deviceEl.value.trim() || undefined
+  });
+  outputEl.textContent = pretty(obs);
+  responseEl.textContent = '(尚未上傳)';
+});
+
+// Upload to FHIR server (POST Observation)
+async function upload(obs, baseUrl) {
+  // ensure trailing slash is present in baseUrl
+  if (!baseUrl.endsWith('/')) baseUrl += '/';
+  const url = baseUrl + 'Observation';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/fhir+json;charset=utf-8',
+        'Accept': 'application/fhir+json'
+      },
+      body: JSON.stringify(obs)
+    });
+
+    const text = await res.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch(e){ parsed = text; }
+
+    return {ok: res.ok, status: res.status, statusText: res.statusText, body: parsed};
+  } catch(err){
+    return {ok:false, error: String(err)};
+  }
+}
+
+document.getElementById('uploadObservation').addEventListener('click', async ()=>{
+  responseEl.textContent = '上傳中...';
+  const obs = buildObservation({
+    patientId: patientIdEl.value.trim(),
+    value: valueEl.value,
+    unitCode: unitEl.value,
+    effectiveDateTime: toIsoLocal(effectiveEl.value),
+    deviceReference: deviceEl.value.trim() || undefined
+  });
+  outputEl.textContent = pretty(obs);
+
+  const baseUrl = fhirServerEl.value.trim();
+  if (!baseUrl) { responseEl.textContent = '請填寫 FHIR Server URL'; return; }
+  const result = await upload(obs, baseUrl);
+  responseEl.textContent = pretty(result);
+
+  // if created, show location and resource id (FHIR servers usually return a Bundle or the created resource)
+  if (result.ok && result.body && result.body.resourceType === 'Observation' && result.body.id) {
+    responseEl.textContent += '\n\n上傳成功，Observation id: ' + result.body.id + '\n可用 GET ' + baseUrl + 'Observation/' + result.body.id;
+  }
+});
+
+// random demo
+document.getElementById('randomize').addEventListener('click', ()=>{
+  // 隨機 35.5 ~ 38.5
+  const v = (Math.random()*3 + 35.5).toFixed(1);
+  valueEl.value = v;
+});
+
+</script>
+</body>
+</html>
