@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>調閱體溫 Observation 資料</title>
+</head>
+<body>
+<h2>調閱病人 49410276 的體溫 Observation</h2>
+<p>FHIR Server: https://hapi.fhir.org/baseR4/</p>
+<button onclick="fetchObservations()">調閱資料</button>
+
+<table border="1" cellpadding="5" id="resultTable" style="margin-top:10px;border-collapse:collapse;">
+  <thead>
+    <tr><th>日期時間</th><th>體溫(°C)</th><th>狀態</th><th>Observation ID</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+async function fetchObservations() {
+  const url = 'https://hapi.fhir.org/baseR4/Observation?patient=49410276&code=8310-5&_sort=-date&_count=10';
+  const response = await fetch(url, { headers: { 'Accept': 'application/fhir+json' } });
+  const data = await response.json();
+  const tbody = document.querySelector('#resultTable tbody');
+  tbody.innerHTML = '';
+
+  if (!data.entry) {
+    tbody.innerHTML = '<tr><td colspan="4">查無資料</td></tr>';
+    return;
+  }
+
+  data.entry.forEach(e => {
+    const obs = e.resource;
+    const date = obs.effectiveDateTime || '-';
+    const value = obs.valueQuantity ? obs.valueQuantity.value : '-';
+    const status = obs.status || '-';
+    const id = obs.id || '-';
+    const row = `<tr><td>${date}</td><td>${value}</td><td>${status}</td><td>${id}</td></tr>`;
+    tbody.insertAdjacentHTML('beforeend', row);
+  });
+}
+</script>
+</body>
+</html>

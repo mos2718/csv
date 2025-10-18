@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>體溫趨勢圖 (每週)</title>
+<style>
+  body { font-family: sans-serif; text-align: center; }
+  canvas { border: 1px solid #ccc; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h2>Patient 49410276 體溫趨勢圖（每週）</h2>
+<button onclick="loadData()">調閱並繪圖</button>
+<canvas id="chart" width="800" height="400"></canvas>
+<pre id="log"></pre>
+
+<script>
+const fhirServer = "https://hapi.fhir.org/baseR4";
+const patientId = "49410276";
+const canvas = document.getElementById("chart");
+const ctx = canvas.getContext("2d");
+
+async function loadData() {
+  document.getElementById("log").textContent = "讀取中...";
+  const url = `${fhirServer}/Observation?patient=${patientId}&code=http://loinc.org|8310-5&_sort=date`;
+  const res = await fetch(url);
+  const json = await res.json();
+  const temps = json.entry?.map(e => {
+    const o = e.resource;
+    return {
+      time: o.effectiveDateTime,
+      value: o.valueQuantity?.value
+    };
+  }).filter(v => v.value) || [];
+
+  if (temps.length === 0) {
+    document.getElementById("log").textContent = "沒有體溫資料。";
+    return;
+  }
+
+  // 篩出當週資料
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay()); // 週日為 0
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  const weekData = temps.filter(t => {
+    const d = new Date(t.time);
+    return d >= weekStart && d < weekEnd;
+  });
+
+  document.getElementById("log").textContent =
+    `共 ${weekData.length} 筆資料 (${weekStart.toLocaleDateString()} ~ ${weekEnd.toLocaleDateString()})`;
+  drawChart(weekData);
+}
+
+function drawChart(data) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const margin = 50;
+  const minTemp = 33, maxTemp = 43;
+  const plotW = canvas.width - margin * 2;
+  const plotH = canvas.height - margin * 2;
+
+  // 坐標軸
+  ctx.beginPath();
+  ctx.moveTo(margin, margin);
+  ctx.lineTo(margin, canvas.height - margin);
+  ctx.lineTo(canvas.width - margin, canvas.height - margin);
+  ctx.stroke();
+
+  // y 軸刻度
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let t = minTemp; t <= maxTemp; t++) {
+    const y = mapY(t, minTemp, maxTemp, margin, plotH);
+    ctx.fillText(t.toFixed(0), margin - 5, y);
+    ctx.beginPath();
+    ctx.moveTo(margin, y);
+    ctx.lineTo(canvas.width - margin, y);
+    ctx.strokeStyle = "#eee";
+    ctx.stroke();
+  }
+
+  if (data.length < 2) return;
+
+  // 轉為 (x, y)
+  const times = data.map(d => new Date(d.time));
+  const tMin = Math.min(...times);
+  const tMax = Math.max(...times);
+
+  ctx.beginPath();
+  ctx.strokeStyle = "red";
+  data.forEach((d, i) => {
+    const x = mapX(new Date(d.time), tMin, tMax, margin, plotW);
+    const y = mapY(d.value, minTemp, maxTemp, margin, plotH);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // 畫點
+  ctx.fillStyle = "blue";
+  data.forEach(d => {
+    const x = mapX(new Date(d.time), tMin, tMax, margin, plotW);
+    const y = mapY(d.value, minTemp, maxTemp, margin, plotH);
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+}
+
+function mapX(time, tMin, tMax, margin, plotW) {
+  return margin + (time - tMin) / (tMax - tMin) * plotW;
+}
+function mapY(temp, minT, maxT, margin, plotH) {
+  return margin + (maxT - temp) / (maxT - minT) * plotH;
+}
+</script>
+</body>
+</html>
